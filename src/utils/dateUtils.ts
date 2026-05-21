@@ -1,4 +1,4 @@
-import { format, subDays } from 'date-fns';
+import { format, subDays, parseISO, differenceInCalendarDays } from 'date-fns';
 
 export interface HeatmapCell {
   date: string;
@@ -49,6 +49,29 @@ export function getCompletionRate(completedDates: string[], days: number): numbe
   }
 
   return Math.round((completedCount / days) * 100);
+}
+
+/**
+ * Returns the all-time best (longest) streak from the full date history.
+ */
+export function getBestStreak(completedDates: string[]): number {
+  if (completedDates.length === 0) return 0;
+
+  const sorted = [...completedDates].sort();
+  let best = 1;
+  let current = 1;
+
+  for (let i = 1; i < sorted.length; i++) {
+    const diff = differenceInCalendarDays(parseISO(sorted[i]), parseISO(sorted[i - 1]));
+    if (diff === 1) {
+      current++;
+      if (current > best) best = current;
+    } else if (diff > 1) {
+      current = 1;
+    }
+  }
+
+  return best;
 }
 
 /**

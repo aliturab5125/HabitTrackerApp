@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, fontSize } from '../theme';
+import { colors, fontSize, fontFamily } from '../theme';
 
 export default function StatsScreen() {
   return (
@@ -24,8 +24,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   heading: {
-    color: colors.text,
+    color: colors.textPrimary,
     fontSize: fontSize.xxl,
+    fontFamily: fontFamily.bold,
     fontWeight: '700',
   },
 });

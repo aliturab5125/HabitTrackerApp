@@ -10,15 +10,33 @@ export const colors = {
   textPrimary: '#F5F0EB',
   textMuted: '#6a85a0',
   textLabel: '#4a6080',
+  error: '#ee5555',
+
+  // Tab bar
   tabBar: 'rgba(13,27,42,0.92)',
   tabBarBorder: 'rgba(123,94,167,0.18)',
   tabBarActiveBg: 'rgba(123,94,167,0.18)',
   tabBarActiveText: '#a78cd4',
   tabBarInactiveText: '#4a6080',
+
+  // Streak card
   streakCardStart: '#3d2a1a',
   streakCardEnd: '#2a1e35',
   streakCardBorder: 'rgba(255,180,50,0.15)',
+
+  // FAB
   fabShadow: 'rgba(123,94,167,0.5)',
+
+  // Modal / bottom sheet
+  backdrop: 'rgba(0,0,0,0.5)',
+  inputSurface: 'rgba(245,240,235,0.07)',
+  inputBorder: 'rgba(123,94,167,0.25)',
+  inputBorderFocused: 'rgba(123,94,167,0.6)',
+
+  // Emoji picker
+  emojiTileBg: 'rgba(245,240,235,0.06)',
+  emojiTileSelectedBg: 'rgba(123,94,167,0.2)',
+
   habitColors: [
     '#A8D5BA',
     '#b9a4e0',
@@ -40,6 +58,7 @@ export const spacing = {
 } as const;
 
 export const fontSize = {
+  xxs: 9,
   xs: 11,
   sm: 13,
   md: 14,
@@ -50,6 +69,7 @@ export const fontSize = {
   emojiFab: 28,
   emojiEmpty: 64,
   emojiRow: 20,
+  saveButton: 15,
 } as const;
 
 export const fontFamily = {
@@ -65,10 +85,14 @@ export const radii = {
   pill: 20,
   fab: 28,
   circle: 999,
+  sheet: 24,
+  input: 12,
+  emojiTile: 10,
 } as const;
 
 export const letterSpacing = {
   label: 0.7,
+  wide: 1.0,
 } as const;
 
 const theme = { colors, spacing, fontSize, fontFamily, radii, letterSpacing };

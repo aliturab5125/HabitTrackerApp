@@ -114,7 +114,7 @@ export default function App() {
           <Stack.Screen
             name="AddHabit"
             component={AddHabitScreen}
-            options={{ presentation: 'modal' }}
+            options={{ presentation: 'transparentModal', animation: 'none' }}
           />
         </Stack.Navigator>
       </NavigationContainer>

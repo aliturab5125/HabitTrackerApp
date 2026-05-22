@@ -1,19 +1,11 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { createMMKV } from 'react-native-mmkv';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Habit } from '../types';
 import {
   getCurrentStreak as computeStreak,
   getCompletionRate as computeCompletionRate,
 } from '../utils/dateUtils';
-
-const mmkv = createMMKV({ id: 'habit-store' });
-
-const mmkvStorage = {
-  getItem: (name: string): string | null => mmkv.getString(name) ?? null,
-  setItem: (name: string, value: string): void => mmkv.set(name, value),
-  removeItem: (name: string): void => { mmkv.remove(name); },
-};
 
 interface HabitState {
   habits: Habit[];
@@ -76,7 +68,7 @@ export const useHabitStore = create<HabitState>()(
     }),
     {
       name: 'habit-store',
-      storage: createJSONStorage(() => mmkvStorage),
+      storage: createJSONStorage(() => AsyncStorage),
     }
   )
 );

@@ -132,14 +132,14 @@ export default function AddHabitScreen() {
   }, [height, goBack, backdropOpacity, translateY]);
 
   const handleSave = useCallback(() => {
-    if (name.trim().length === 0) {
-      setShowError(true);
-      return;
-    }
     saveScale.value = withSequence(
       withSpring(0.97, { damping: 12 }),
       withSpring(1, { damping: 12 }),
     );
+    if (name.trim().length === 0) {
+      setShowError(true);
+      return;
+    }
     addHabit(name.trim(), selectedEmoji, selectedColor);
     close();
   }, [name, selectedEmoji, selectedColor, addHabit, close, saveScale]);
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     height: 48,
-    borderRadius: radii.pill,
+    borderRadius: radii.pillLg,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',

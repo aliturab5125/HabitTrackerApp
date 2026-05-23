@@ -37,6 +37,20 @@ export const colors = {
   emojiTileBg: 'rgba(245,240,235,0.06)',
   emojiTileSelectedBg: 'rgba(123,94,167,0.2)',
 
+  // Stats — hero card
+  statsHeroBg: 'rgba(123,94,167,0.18)',
+  statsHeroBorder: 'rgba(123,94,167,0.3)',
+  statsHeroTitle: '#8a70b8',
+  statsArcTrack: 'rgba(255,255,255,0.08)',
+
+  // Stats — per-habit performance card
+  statsHabitCardBg: 'rgba(245,240,235,0.04)',
+  statsHabitCardBorder: 'rgba(123,94,167,0.1)',
+  statsProgressTrack: 'rgba(255,255,255,0.08)',
+
+  // Stats — heatmap
+  heatmapEmpty: '#2a3a4a',
+
   habitColors: [
     '#A8D5BA',
     '#b9a4e0',
@@ -65,6 +79,8 @@ export const fontSize = {
   lg: 16,
   xl: 20,
   xxl: 28,
+  statsHero: 32,
+  statsMini: 22,
   emoji: 28,
   emojiFab: 28,
   emojiEmpty: 64,
@@ -83,6 +99,7 @@ export const radii = {
   card: 14,
   cardLg: 16,
   pill: 20,
+  pillLg: 24,
   fab: 28,
   circle: 999,
   sheet: 24,

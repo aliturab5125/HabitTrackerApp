@@ -1,14 +1,160 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useMemo } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, fontSize, fontFamily } from '../theme';
+import {
+  format,
+  subDays,
+  parseISO,
+  startOfMonth,
+  getDaysInMonth,
+} from 'date-fns';
+import {
+  colors,
+  spacing,
+  fontSize,
+  fontFamily,
+  letterSpacing,
+} from '../theme';
+import { useHabitStore } from '../store/habitStore';
+import { getCurrentStreak, getCompletionRate, getTodayISO } from '../utils/dateUtils';
+import StatsHeroCard from '../components/StatsHeroCard';
+import MiniStatCard from '../components/MiniStatCard';
+import HabitPerformanceCard from '../components/HabitPerformanceCard';
+import LastFourteenDaysChart, {
+  type DailyDatum,
+} from '../components/LastFourteenDaysChart';
+
+const LAST_N_DAYS = 14;
 
 export default function StatsScreen() {
+  const { habits } = useHabitStore();
+  const { width } = useWindowDimensions();
+  const chartWidth = width - spacing.md * 2;
+
+  const today = getTodayISO();
+
+  const monthStats = useMemo(() => {
+    const now = new Date();
+    const monthStart = startOfMonth(now);
+    const daysInMonth = getDaysInMonth(now);
+    const completedDaysSet = new Set<string>();
+
+    for (const habit of habits) {
+      for (const date of habit.completedDates) {
+        const parsed = parseISO(date);
+        if (parsed >= monthStart && parsed <= now) {
+          completedDaysSet.add(date);
+        }
+      }
+    }
+
+    return { completedDays: completedDaysSet.size, daysInMonth };
+  }, [habits]);
+
+  const doneToday = useMemo(
+    () => habits.filter((h) => h.completedDates.includes(today)).length,
+    [habits, today],
+  );
+
+  const bestStreak = useMemo(() => {
+    if (habits.length === 0) return 0;
+    return Math.max(...habits.map((h) => getCurrentStreak(h.completedDates)));
+  }, [habits]);
+
+  const avgRate = useMemo(() => {
+    if (habits.length === 0) return 0;
+    const total = habits.reduce(
+      (sum, h) => sum + getCompletionRate(h.completedDates, 30),
+      0,
+    );
+    return Math.round(total / habits.length);
+  }, [habits]);
+
+  const last14: DailyDatum[] = useMemo(() => {
+    const habitSets = habits.map((h) => new Set(h.completedDates));
+    const result: DailyDatum[] = [];
+    for (let i = LAST_N_DAYS - 1; i >= 0; i--) {
+      const date = subDays(new Date(), i);
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const label = format(date, 'EEE');
+      const count = habitSets.reduce(
+        (sum, set) => sum + (set.has(dateStr) ? 1 : 0),
+        0,
+      );
+      result.push({ label, value: count });
+    }
+    return result;
+  }, [habits]);
+
+  if (habits.length === 0) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyEmoji}>📊</Text>
+          <Text style={styles.emptyTitle}>Nothing to chart yet</Text>
+          <Text style={styles.emptySubtext}>
+            Add a habit and check back as you build streaks.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.heading}>Stats</Text>
-      </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <StatsHeroCard
+          completedDays={monthStats.completedDays}
+          totalDays={monthStats.daysInMonth}
+        />
+
+        <View style={styles.miniGrid}>
+          <View style={styles.miniRow}>
+            <MiniStatCard
+              icon="format-list-checks"
+              value={habits.length}
+              label="Total Habits"
+              index={0}
+            />
+            <MiniStatCard
+              icon="check-circle-outline"
+              value={doneToday}
+              label="Done Today"
+              index={1}
+            />
+          </View>
+          <View style={styles.miniRow}>
+            <MiniStatCard
+              icon="fire"
+              value={bestStreak}
+              label="Best Streak"
+              index={2}
+            />
+            <MiniStatCard
+              icon="percent-outline"
+              value={`${avgRate}%`}
+              label="Avg. Rate"
+              index={3}
+            />
+          </View>
+        </View>
+
+        <Text style={styles.sectionLabel}>HABIT PERFORMANCE</Text>
+        {habits.map((habit) => (
+          <HabitPerformanceCard key={habit.id} habit={habit} />
+        ))}
+
+        <LastFourteenDaysChart data={last14} chartWidth={chartWidth} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -18,15 +164,51 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  content: {
+  scrollContent: {
+    paddingTop: spacing.md,
+    paddingBottom: 120,
+  },
+  miniGrid: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  miniRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  sectionLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.semiBold,
+    fontWeight: '600',
+    color: colors.textLabel,
+    letterSpacing: letterSpacing.label,
+    textTransform: 'uppercase',
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  emptyContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: spacing.lg,
   },
-  heading: {
-    color: colors.textPrimary,
-    fontSize: fontSize.xxl,
+  emptyEmoji: {
+    fontSize: fontSize.emojiEmpty,
+    marginBottom: spacing.md,
+  },
+  emptyTitle: {
+    fontSize: 18,
     fontFamily: fontFamily.bold,
     fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
+  },
+  emptySubtext: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.regular,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
 });

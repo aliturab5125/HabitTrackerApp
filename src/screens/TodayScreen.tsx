@@ -1,15 +1,18 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
   FlatList,
   StyleSheet,
   TouchableOpacity,
+  Alert,
   ListRenderItemInfo,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Swipeable } from 'react-native-gesture-handler';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -37,8 +40,9 @@ function getGreeting(): string {
 
 export default function TodayScreen() {
   const navigation = useNavigation<NavProp>();
-  const { habits, toggleHabitCompletion } = useHabitStore();
+  const { habits, toggleHabitCompletion, deleteHabit } = useHabitStore();
   const today = getTodayISO();
+  const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
   const dateLabel = format(new Date(), 'EEEE, MMMM d');
 
   const completedToday = useMemo(
@@ -63,6 +67,37 @@ export default function TodayScreen() {
     [toggleHabitCompletion],
   );
 
+  const handlePressHabit = useCallback(
+    (id: string) => {
+      navigation.navigate('HabitDetail', { habitId: id });
+    },
+    [navigation],
+  );
+
+  const handleSwipeDelete = useCallback(
+    (habit: Habit) => {
+      swipeableRefs.current.get(habit.id)?.close();
+      Alert.alert(
+        `Delete "${habit.name}"?`,
+        'This will remove all your history for this habit.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => swipeableRefs.current.get(habit.id)?.close(),
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => deleteHabit(habit.id),
+          },
+        ],
+        { cancelable: true },
+      );
+    },
+    [deleteHabit],
+  );
+
   const fabScale = useSharedValue(1);
 
   React.useEffect(() => {
@@ -84,11 +119,38 @@ export default function TodayScreen() {
     transform: [{ scale: fabScale.value }],
   }));
 
+  const renderRightActions = useCallback(
+    (habit: Habit) => (
+      <TouchableOpacity
+        style={styles.swipeDeleteAction}
+        onPress={() => handleSwipeDelete(habit)}
+        activeOpacity={0.85}
+      >
+        <MaterialCommunityIcons name="trash-can-outline" size={22} color="#ffffff" />
+      </TouchableOpacity>
+    ),
+    [handleSwipeDelete],
+  );
+
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<Habit>) => (
-      <HabitRow habit={item} onToggle={handleToggle} />
+      <Swipeable
+        ref={(ref) => {
+          if (ref) swipeableRefs.current.set(item.id, ref);
+          else swipeableRefs.current.delete(item.id);
+        }}
+        renderRightActions={() => renderRightActions(item)}
+        rightThreshold={40}
+        overshootRight={false}
+      >
+        <HabitRow
+          habit={item}
+          onToggle={handleToggle}
+          onPressHabit={handlePressHabit}
+        />
+      </Swipeable>
     ),
-    [handleToggle],
+    [handleToggle, handlePressHabit, renderRightActions],
   );
 
   const keyExtractor = useCallback((item: Habit) => item.id, []);
@@ -210,6 +272,15 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontFamily: fontFamily.regular,
     color: colors.textMuted,
+  },
+  swipeDeleteAction: {
+    width: 80,
+    backgroundColor: '#1a0808',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    borderRadius: radii.card,
   },
   fab: {
     position: 'absolute',

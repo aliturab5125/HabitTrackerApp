@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import {
   useFonts,
@@ -18,6 +19,7 @@ import TodayScreen from './src/screens/TodayScreen';
 import StatsScreen from './src/screens/StatsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import AddHabitScreen from './src/screens/AddHabitScreen';
+import HabitDetailScreen from './src/screens/HabitDetailScreen';
 import { colors, fontSize, fontFamily } from './src/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -25,6 +27,7 @@ SplashScreen.preventAutoHideAsync();
 export type RootStackParamList = {
   MainTabs: undefined;
   AddHabit: undefined;
+  HabitDetail: { habitId: string };
 };
 
 export type RootTabParamList = {
@@ -106,11 +109,13 @@ export default function App() {
   if (!fontsLoaded) return null;
 
   return (
+    <GestureHandlerRootView style={styles.gestureRoot}>
     <SafeAreaProvider>
       <StatusBar style="light" />
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen name="HabitDetail" component={HabitDetailScreen} />
           <Stack.Screen
             name="AddHabit"
             component={AddHabitScreen}
@@ -119,10 +124,14 @@ export default function App() {
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
   tabBar: {
     height: 60,
     backgroundColor: colors.tabBar,

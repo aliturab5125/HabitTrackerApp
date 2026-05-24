@@ -9,17 +9,33 @@ import {
 
 interface HabitState {
   habits: Habit[];
+
+  // Preferences
+  reminderEnabled: boolean;
+  reminderTime: string;
+  hapticsEnabled: boolean;
+
+  // Habit actions
   addHabit: (name: string, emoji: string, color: string) => void;
   deleteHabit: (id: string) => void;
   toggleHabitCompletion: (id: string, date: string) => void;
   getCompletionRate: (id: string, days: number) => number;
   getCurrentStreak: (id: string) => number;
+  resetAll: () => void;
+
+  // Preference setters
+  setReminderEnabled: (val: boolean) => void;
+  setReminderTime: (val: string) => void;
+  setHapticsEnabled: (val: boolean) => void;
 }
 
 export const useHabitStore = create<HabitState>()(
   persist(
     (set, get) => ({
       habits: [],
+      reminderEnabled: false,
+      reminderTime: '8:00 AM',
+      hapticsEnabled: true,
 
       addHabit: (name, emoji, color) => {
         const newHabit: Habit = {
@@ -65,6 +81,14 @@ export const useHabitStore = create<HabitState>()(
         if (!habit) return 0;
         return computeStreak(habit.completedDates);
       },
+
+      resetAll: () => {
+        set({ habits: [] });
+      },
+
+      setReminderEnabled: (val) => set({ reminderEnabled: val }),
+      setReminderTime: (val) => set({ reminderTime: val }),
+      setHapticsEnabled: (val) => set({ hapticsEnabled: val }),
     }),
     {
       name: 'habit-store',

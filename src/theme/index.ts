@@ -51,6 +51,24 @@ export const colors = {
   // Stats — heatmap
   heatmapEmpty: '#2a3a4a',
 
+  // Detail — glowing emoji ring
+  detailRingBg: 'rgba(123,94,167,0.2)',
+  detailRingBorder: 'rgba(123,94,167,0.4)',
+
+  // Detail — stat pills
+  detailPillBg: 'rgba(245,240,235,0.07)',
+  detailPillBorder: 'rgba(123,94,167,0.15)',
+
+  // Detail — delete button
+  deleteText: '#dd4444',
+  deleteBorder: 'rgba(200,50,50,0.2)',
+
+  // Settings screen
+  settingsHabitRowBg: 'rgba(245,240,235,0.04)',
+  settingsToggleTrackOff: '#2a3a4a',
+  settingsDangerLabel: '#cc4444',
+  settingsVersionText: '#2a3a4a',
+
   habitColors: [
     '#A8D5BA',
     '#b9a4e0',
@@ -81,6 +99,9 @@ export const fontSize = {
   xxl: 28,
   statsHero: 32,
   statsMini: 22,
+  detailHabitName: 22,
+  detailStreak: 32,
+  detailEmoji: 36,
   emoji: 28,
   emojiFab: 28,
   emojiEmpty: 64,

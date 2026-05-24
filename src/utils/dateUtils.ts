@@ -6,6 +6,7 @@ import {
   startOfWeek,
   subWeeks,
   addDays,
+  getDay,
 } from 'date-fns';
 
 export interface HeatmapCell {
@@ -18,25 +19,48 @@ export function getTodayISO(): string {
 }
 
 /**
- * Counts consecutive completed days ending on today or yesterday.
- * If neither today nor yesterday is completed, streak is 0.
+ * Counts consecutive completed active-days ending on today (or yesterday if
+ * today is not yet completed). A "missed" day only breaks the streak when that
+ * weekday is in activeDays and completedDates doesn't contain it.
+ * When activeDays is omitted all 7 days are considered active.
  */
-export function getCurrentStreak(completedDates: string[]): number {
-  if (completedDates.length === 0) return 0;
-
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+export function getCurrentStreak(
+  completedDates: string[],
+  activeDays?: number[],
+): number {
+  const allDaysActive = !activeDays || activeDays.length === 7;
   const dateSet = new Set(completedDates);
 
-  const mostRecentDate = dateSet.has(today) ? today : dateSet.has(yesterday) ? yesterday : null;
-  if (!mostRecentDate) return 0;
-
   let streak = 0;
-  let daysBack = mostRecentDate === today ? 0 : 1;
+  let daysBack = 0;
+  const today = new Date();
 
-  while (dateSet.has(format(subDays(new Date(), daysBack), 'yyyy-MM-dd'))) {
-    streak++;
+  // Walk backwards day by day from today
+  while (true) {
+    const candidateDate = subDays(today, daysBack);
+    const candidateISO = format(candidateDate, 'yyyy-MM-dd');
+    const weekday = getDay(candidateDate); // 0=Sun … 6=Sat
+
+    const isActiveDay = allDaysActive || (activeDays?.includes(weekday) ?? false);
+
+    if (isActiveDay) {
+      if (dateSet.has(candidateISO)) {
+        streak++;
+      } else {
+        // Allow today to be incomplete without breaking the streak only for
+        // the very first iteration (streak is still 0).
+        if (daysBack === 0 && streak === 0) {
+          daysBack++;
+          continue;
+        }
+        break;
+      }
+    }
+    // Inactive days are skipped — they don't increment or break the streak.
     daysBack++;
+
+    // Safety limit: don't walk back more than 5 years
+    if (daysBack > 365 * 5) break;
   }
 
   return streak;
@@ -84,8 +108,6 @@ export function getBestStreak(completedDates: string[]): number {
 
 /**
  * Returns a 2D array [week][day] of HeatmapCells for the last `weeks` weeks.
- * Week 0 is the oldest; the last week contains today.
- * Each week has 7 days ordered from oldest (index 0) to newest (index 6).
  */
 export function getHeatmapData(completedDates: string[], weeks: number): HeatmapCell[][] {
   if (weeks <= 0) return [];
@@ -109,9 +131,7 @@ export function getHeatmapData(completedDates: string[], weeks: number): Heatmap
 
 /**
  * Returns `weeks` columns × 7 rows of HeatmapCells aligned to Monday-start
- * calendar weeks. Each inner array is one week in Mon → Sun order. The last
- * week is the calendar week containing today (future days within that week
- * are included but marked not-completed).
+ * calendar weeks.
  */
 export function getCalendarHeatmap(
   completedDates: string[],
@@ -135,4 +155,14 @@ export function getCalendarHeatmap(
   }
 
   return result;
+}
+
+/** Formats a "HH:MM" 24h string to "8:00 AM" display format. */
+export function formatReminderTime(hhmm: string): string {
+  const [hourStr, minuteStr] = hhmm.split(':');
+  const hour = parseInt(hourStr, 10);
+  const minute = parseInt(minuteStr, 10);
+  const suffix = hour < 12 ? 'AM' : 'PM';
+  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  return `${displayHour}:${String(minute).padStart(2, '0')} ${suffix}`;
 }

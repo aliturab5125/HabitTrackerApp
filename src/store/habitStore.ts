@@ -1,12 +1,26 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Habit } from '../types';
+import { Habit, HabitType } from '../types';
 import {
   getCurrentStreak as computeStreak,
   getCompletionRate as computeCompletionRate,
   getTodayISO,
 } from '../utils/dateUtils';
+import {
+  scheduleHabitReminders,
+  cancelHabitReminders,
+} from '../utils/notificationUtils';
+
+export interface NewHabitParams {
+  name: string;
+  emoji: string;
+  color: string;
+  habitType: HabitType;
+  targetCount: number;
+  activeDays: number[];
+  reminderTimes: string[];
+}
 
 interface HabitState {
   habits: Habit[];
@@ -17,10 +31,12 @@ interface HabitState {
   hapticsEnabled: boolean;
 
   // Habit actions
-  addHabit: (name: string, emoji: string, color: string) => void;
-  editHabit: (id: string, name: string, emoji: string, color: string) => void;
+  addHabit: (params: NewHabitParams) => void;
+  editHabit: (id: string, params: NewHabitParams) => void;
   deleteHabit: (id: string) => void;
   toggleHabitCompletion: (id: string, date: string) => void;
+  incrementCount: (id: string, date: string) => void;
+  decrementCount: (id: string, date: string) => void;
   getCompletionRate: (id: string, days: number) => number;
   getCurrentStreak: (id: string) => number;
   isCompletedToday: (habit: Habit) => boolean;
@@ -40,33 +56,83 @@ export const useHabitStore = create<HabitState>()(
       reminderTime: '8:00 AM',
       hapticsEnabled: true,
 
-      addHabit: (name, emoji, color) => {
+      addHabit: (params) => {
         const newHabit: Habit = {
           id: Date.now().toString(),
-          name,
-          emoji,
-          color,
+          name: params.name,
+          emoji: params.emoji,
+          color: params.color,
           createdAt: new Date().toISOString(),
-          habitType: 'boolean',
-          targetCount: 1,
-          activeDays: [0, 1, 2, 3, 4, 5, 6],
-          reminderTimes: [],
+          habitType: params.habitType,
+          targetCount: params.targetCount,
+          activeDays: params.activeDays,
+          reminderTimes: params.reminderTimes,
           completedDates: [],
           countLog: {},
           notificationIds: [],
         };
+
+        // Schedule notifications (fire-and-forget)
+        scheduleHabitReminders(newHabit).then((ids) => {
+          set((state) => ({
+            habits: state.habits.map((h) =>
+              h.id === newHabit.id ? { ...h, notificationIds: ids } : h
+            ),
+          }));
+        });
+
         set((state) => ({ habits: [...state.habits, newHabit] }));
       },
 
-      editHabit: (id, name, emoji, color) => {
+      editHabit: (id, params) => {
+        const existing = get().habits.find((h) => h.id === id);
+
+        // Cancel old notifications then reschedule
+        if (existing) {
+          cancelHabitReminders(existing.notificationIds ?? []).then(() => {
+            const updated: Habit = {
+              ...existing,
+              name: params.name,
+              emoji: params.emoji,
+              color: params.color,
+              habitType: params.habitType,
+              targetCount: params.targetCount,
+              activeDays: params.activeDays,
+              reminderTimes: params.reminderTimes,
+            };
+            scheduleHabitReminders(updated).then((ids) => {
+              set((state) => ({
+                habits: state.habits.map((h) =>
+                  h.id === id ? { ...updated, notificationIds: ids } : h
+                ),
+              }));
+            });
+          });
+        }
+
         set((state) => ({
           habits: state.habits.map((h) =>
-            h.id === id ? { ...h, name, emoji, color } : h
+            h.id === id
+              ? {
+                  ...h,
+                  name: params.name,
+                  emoji: params.emoji,
+                  color: params.color,
+                  habitType: params.habitType,
+                  targetCount: params.targetCount,
+                  activeDays: params.activeDays,
+                  reminderTimes: params.reminderTimes,
+                }
+              : h
           ),
         }));
       },
 
       deleteHabit: (id) => {
+        const habit = get().habits.find((h) => h.id === id);
+        if (habit) {
+          cancelHabitReminders(habit.notificationIds ?? []);
+        }
         set((state) => ({
           habits: state.habits.filter((h) => h.id !== id),
         }));
@@ -94,6 +160,29 @@ export const useHabitStore = create<HabitState>()(
         }));
       },
 
+      incrementCount: (id, date) => {
+        set((state) => ({
+          habits: state.habits.map((h) => {
+            if (h.id !== id) return h;
+            const current = h.countLog?.[date] ?? 0;
+            const target = h.targetCount ?? 1;
+            if (current >= target) return h;
+            return { ...h, countLog: { ...h.countLog, [date]: current + 1 } };
+          }),
+        }));
+      },
+
+      decrementCount: (id, date) => {
+        set((state) => ({
+          habits: state.habits.map((h) => {
+            if (h.id !== id) return h;
+            const current = h.countLog?.[date] ?? 0;
+            if (current <= 0) return h;
+            return { ...h, countLog: { ...h.countLog, [date]: current - 1 } };
+          }),
+        }));
+      },
+
       getCompletionRate: (id, days) => {
         const habit = get().habits.find((h) => h.id === id);
         if (!habit) return 0;
@@ -103,7 +192,7 @@ export const useHabitStore = create<HabitState>()(
       getCurrentStreak: (id) => {
         const habit = get().habits.find((h) => h.id === id);
         if (!habit) return 0;
-        return computeStreak(habit.completedDates);
+        return computeStreak(habit.completedDates, habit.activeDays);
       },
 
       isCompletedToday: (habit) => {
@@ -116,6 +205,8 @@ export const useHabitStore = create<HabitState>()(
       },
 
       resetAll: () => {
+        const habits = get().habits;
+        habits.forEach((h) => cancelHabitReminders(h.notificationIds ?? []));
         set({ habits: [] });
       },
 

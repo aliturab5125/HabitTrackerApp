@@ -70,7 +70,7 @@ function AllDoneToast({ visible }: { visible: boolean }) {
 
 export default function TodayScreen() {
   const navigation = useNavigation<NavProp>();
-  const { habits, toggleHabitCompletion, deleteHabit, isCompletedToday } = useHabitStore();
+  const { habits, toggleHabitCompletion, incrementCount, decrementCount, deleteHabit, isCompletedToday } = useHabitStore();
   const today = getTodayISO();
   const dateLabel = format(new Date(), 'EEEE, MMMM d');
   const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
@@ -102,6 +102,20 @@ export default function TodayScreen() {
       toggleHabitCompletion(id, date);
     },
     [toggleHabitCompletion],
+  );
+
+  const handleIncrement = useCallback(
+    (id: string, date: string) => {
+      incrementCount(id, date);
+    },
+    [incrementCount],
+  );
+
+  const handleDecrement = useCallback(
+    (id: string, date: string) => {
+      decrementCount(id, date);
+    },
+    [decrementCount],
   );
 
   // Check for 100% completion after every toggle
@@ -250,6 +264,8 @@ export default function TodayScreen() {
                 <HabitRow
                   habit={item}
                   onToggle={handleToggle}
+                  onIncrement={handleIncrement}
+                  onDecrement={handleDecrement}
                   onPressHabit={handlePressHabit}
                   onLongPressHabit={handleLongPressHabit}
                 />

@@ -9,6 +9,7 @@ import {
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedProps,
   withSequence,
   withSpring,
   withTiming,
@@ -16,13 +17,79 @@ import Animated, {
   runOnJS,
   SharedValue,
 } from 'react-native-reanimated';
+import Svg, { Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { Habit } from '../types';
 import { colors, spacing, fontSize, fontFamily, radii } from '../theme';
 import { getTodayISO, getCurrentStreak } from '../utils/dateUtils';
 import { useHabitStore } from '../store/habitStore';
 
-// ─── Particle burst angles (6 directions, every 60°) ─────────────────────────
+// ─── Count Ring (SVG) ─────────────────────────────────────────────────────────
+
+const RING_SIZE = 32;
+const RING_STROKE = 4;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+interface CountRingProps {
+  count: number;
+  target: number;
+  accentColor: string;
+  isComplete: boolean;
+}
+
+function CountRing({ count, target, accentColor, isComplete }: CountRingProps) {
+  const progress = useSharedValue(target > 0 ? count / target : 0);
+
+  useEffect(() => {
+    progress.value = withTiming(target > 0 ? count / target : 0, { duration: 300 });
+  }, [count, target, progress]);
+
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: RING_CIRCUMFERENCE * (1 - Math.min(progress.value, 1)),
+  }));
+
+  const strokeColor = isComplete ? colors.success : accentColor;
+
+  return (
+    <View style={styles.ringContainer}>
+      <Svg width={RING_SIZE} height={RING_SIZE}>
+        {/* Track */}
+        <Circle
+          cx={RING_SIZE / 2}
+          cy={RING_SIZE / 2}
+          r={RING_RADIUS}
+          stroke="rgba(255,255,255,0.1)"
+          strokeWidth={RING_STROKE}
+          fill="none"
+        />
+        {/* Progress */}
+        <AnimatedCircle
+          cx={RING_SIZE / 2}
+          cy={RING_SIZE / 2}
+          r={RING_RADIUS}
+          stroke={strokeColor}
+          strokeWidth={RING_STROKE}
+          fill="none"
+          strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+          animatedProps={animatedProps}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
+        />
+      </Svg>
+      <View style={styles.ringCenter}>
+        <Text style={[styles.ringCount, isComplete && styles.ringCountComplete]}>
+          {count}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Particle burst ───────────────────────────────────────────────────────────
+
 const PARTICLE_ANGLES_DEG = [0, 60, 120, 180, 240, 300];
 const PARTICLE_DIST = 22;
 
@@ -50,14 +117,10 @@ interface CheckboxProps {
 }
 
 function AnimatedCheckbox({ isCompleted, onPress, accentColor }: CheckboxProps) {
-  // Scale animation
   const checkScale = useSharedValue(1);
-  // Color progress: 0 = unchecked, 1 = checked
   const colorProgress = useSharedValue(isCompleted ? 1 : 0);
-  // Background opacity
   const bgOpacity = useSharedValue(isCompleted ? 1 : 0);
 
-  // 6 particles
   const p0tx = useSharedValue(0); const p0ty = useSharedValue(0); const p0op = useSharedValue(0);
   const p1tx = useSharedValue(0); const p1ty = useSharedValue(0); const p1op = useSharedValue(0);
   const p2tx = useSharedValue(0); const p2ty = useSharedValue(0); const p2op = useSharedValue(0);
@@ -77,27 +140,22 @@ function AnimatedCheckbox({ isCompleted, onPress, accentColor }: CheckboxProps) 
   const animateParticles = useCallback(() => {
     PARTICLE_ANGLES_DEG.forEach((deg, i) => {
       const rad = deg * (Math.PI / 180);
-      const tx = particleTx[i];
-      const ty = particleTy[i];
-      const op = particleOp[i];
-      tx.value = 0;
-      ty.value = 0;
-      op.value = 1;
-      tx.value = withTiming(Math.cos(rad) * PARTICLE_DIST, { duration: 300 });
-      ty.value = withTiming(Math.sin(rad) * PARTICLE_DIST, { duration: 300 });
-      op.value = withTiming(0, { duration: 300 });
+      particleTx[i].value = 0;
+      particleTy[i].value = 0;
+      particleOp[i].value = 1;
+      particleTx[i].value = withTiming(Math.cos(rad) * PARTICLE_DIST, { duration: 300 });
+      particleTy[i].value = withTiming(Math.sin(rad) * PARTICLE_DIST, { duration: 300 });
+      particleOp[i].value = withTiming(0, { duration: 300 });
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const triggerCheckAnimation = useCallback(() => {
-    // 3-phase spring
     checkScale.value = withSequence(
       withSpring(0.85, { damping: 10 }),
       withSpring(1.2, { damping: 8 }),
       withSpring(1.0, { damping: 12 }),
     );
-    // Particles fire on check (not uncheck)
     if (!isCompleted) {
       runOnJS(animateParticles)();
     }
@@ -123,18 +181,9 @@ function AnimatedCheckbox({ isCompleted, onPress, accentColor }: CheckboxProps) 
   return (
     <TouchableOpacity onPress={triggerCheckAnimation} hitSlop={8}>
       <View style={styles.checkboxContainer}>
-        {/* Particles */}
         {particleTx.map((tx, i) => (
-          <Particle
-            key={i}
-            tx={tx}
-            ty={particleTy[i]}
-            op={particleOp[i]}
-            color={accentColor}
-          />
+          <Particle key={i} tx={tx} ty={particleTy[i]} op={particleOp[i]} color={accentColor} />
         ))}
-
-        {/* Checkbox */}
         <Animated.View style={[styles.checkbox, checkboxStyle]}>
           <Animated.View style={checkboxBgStyle} />
           {isCompleted && <Text style={styles.checkmark}>✓</Text>}
@@ -149,21 +198,34 @@ function AnimatedCheckbox({ isCompleted, onPress, accentColor }: CheckboxProps) 
 interface Props {
   habit: Habit;
   onToggle: (id: string, date: string) => void;
+  onIncrement?: (id: string, date: string) => void;
+  onDecrement?: (id: string, date: string) => void;
   onPressHabit?: (id: string) => void;
   onLongPressHabit?: (habit: Habit) => void;
 }
 
-export default function HabitRow({ habit, onToggle, onPressHabit, onLongPressHabit }: Props) {
+export default function HabitRow({
+  habit,
+  onToggle,
+  onIncrement,
+  onDecrement,
+  onPressHabit,
+  onLongPressHabit,
+}: Props) {
   const today = getTodayISO();
-  const isCompletedToday = useHabitStore((s) => s.isCompletedToday);
-  const isCompleted = isCompletedToday(habit);
-  const streak = getCurrentStreak(habit.completedDates);
+  const isCompletedTodayFn = useHabitStore((s) => s.isCompletedToday);
+  const isCompleted = isCompletedTodayFn(habit);
+  const streak = getCurrentStreak(habit.completedDates, habit.activeDays);
   const hapticsEnabled = useHabitStore((s) => s.hapticsEnabled);
 
-  const opacity = useSharedValue(isCompleted ? 0.55 : 1);
+  const isCount = (habit.habitType ?? 'boolean') === 'count';
+  const todayCount = isCount ? (habit.countLog?.[today] ?? 0) : 0;
+  const target = habit.targetCount ?? 1;
+
+  const opacity = useSharedValue(isCompleted ? 0.6 : 1);
 
   useEffect(() => {
-    opacity.value = withSpring(isCompleted ? 0.55 : 1, { damping: 15 });
+    opacity.value = withSpring(isCompleted ? 0.6 : 1, { damping: 15 });
   }, [isCompleted, opacity]);
 
   const animatedRowStyle = useAnimatedStyle(() => ({
@@ -177,9 +239,27 @@ export default function HabitRow({ habit, onToggle, onPressHabit, onLongPressHab
     onToggle(habit.id, today);
   }, [habit.id, onToggle, today, hapticsEnabled]);
 
+  const handleIncrement = useCallback(async () => {
+    if (hapticsEnabled) {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    onIncrement?.(habit.id, today);
+  }, [habit.id, onIncrement, today, hapticsEnabled]);
+
+  const handleDecrement = useCallback(async () => {
+    if (hapticsEnabled) {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    onDecrement?.(habit.id, today);
+  }, [habit.id, onDecrement, today, hapticsEnabled]);
+
   const handlePress = useCallback(() => {
-    onPressHabit?.(habit.id);
-  }, [habit.id, onPressHabit]);
+    if (isCount) {
+      handleIncrement();
+    } else {
+      onPressHabit?.(habit.id);
+    }
+  }, [isCount, handleIncrement, habit.id, onPressHabit]);
 
   const handleLongPress = useCallback(async () => {
     if (hapticsEnabled) {
@@ -196,7 +276,6 @@ export default function HabitRow({ habit, onToggle, onPressHabit, onLongPressHab
         onPress={handlePress}
         onLongPress={handleLongPress}
         delayLongPress={350}
-        disabled={!onPressHabit && !onLongPressHabit}
         style={({ pressed }) => [styles.pressArea, pressed && styles.pressed]}
       >
         <View style={[styles.emojiCircle, { backgroundColor: emojiCircleColor }]}>
@@ -204,18 +283,40 @@ export default function HabitRow({ habit, onToggle, onPressHabit, onLongPressHab
         </View>
 
         <View style={styles.middle}>
-          <Text style={[styles.habitName, isCompleted && styles.strikethrough]}>
+          <Text style={[styles.habitName, !isCount && isCompleted && styles.strikethrough]}>
             {habit.name}
           </Text>
-          <Text style={styles.streakLabel}>🔥 {streak} days</Text>
+          {isCount ? (
+            <Text style={styles.streakLabel}>
+              {todayCount} / {target}
+            </Text>
+          ) : (
+            <Text style={styles.streakLabel}>🔥 {streak} days</Text>
+          )}
         </View>
       </Pressable>
 
-      <AnimatedCheckbox
-        isCompleted={isCompleted}
-        onPress={handleToggle}
-        accentColor={habit.color}
-      />
+      {isCount ? (
+        <View style={styles.countControls}>
+          {todayCount > 0 && (
+            <TouchableOpacity onPress={handleDecrement} hitSlop={8} style={styles.countBtn}>
+              <Text style={styles.countBtnText}>−</Text>
+            </TouchableOpacity>
+          )}
+          <CountRing
+            count={todayCount}
+            target={target}
+            accentColor={habit.color}
+            isComplete={isCompleted}
+          />
+        </View>
+      ) : (
+        <AnimatedCheckbox
+          isCompleted={isCompleted}
+          onPress={handleToggle}
+          accentColor={habit.color}
+        />
+      )}
     </Animated.View>
   );
 }
@@ -271,7 +372,52 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2,
   },
-  // Checkbox container provides positioning context for particles
+  // Count ring
+  ringContainer: {
+    width: RING_SIZE,
+    height: RING_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringCenter: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringCount: {
+    fontSize: 11,
+    fontFamily: fontFamily.bold,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    lineHeight: 13,
+  },
+  ringCountComplete: {
+    color: colors.success,
+  },
+  countControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  countBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.inputSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+  },
+  countBtnText: {
+    fontSize: 14,
+    fontFamily: fontFamily.bold,
+    fontWeight: '700',
+    color: colors.textMuted,
+    lineHeight: 16,
+    marginTop: -1,
+  },
+  // Checkbox
   checkboxContainer: {
     width: 24,
     height: 24,

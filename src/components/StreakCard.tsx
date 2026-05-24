@@ -1,6 +1,13 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  useSharedValue,
+  withTiming,
+  useAnimatedReaction,
+  runOnJS,
+  Easing,
+} from 'react-native-reanimated';
 import { colors, spacing, fontSize, fontFamily, radii } from '../theme';
 
 interface Props {
@@ -9,6 +16,26 @@ interface Props {
 }
 
 export default function StreakCard({ currentStreak, bestStreak }: Props) {
+  const streakAnim = useSharedValue(0);
+  const [displayedStreak, setDisplayedStreak] = useState(0);
+
+  useAnimatedReaction(
+    () => Math.round(streakAnim.value),
+    (current, previous) => {
+      if (current !== previous) {
+        runOnJS(setDisplayedStreak)(current);
+      }
+    },
+  );
+
+  useEffect(() => {
+    streakAnim.value = 0;
+    streakAnim.value = withTiming(currentStreak, {
+      duration: 800,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [currentStreak, streakAnim]);
+
   return (
     <LinearGradient
       colors={[colors.streakCardStart, colors.streakCardEnd]}
@@ -18,7 +45,7 @@ export default function StreakCard({ currentStreak, bestStreak }: Props) {
     >
       <Text style={styles.fireEmoji}>🔥</Text>
       <View style={styles.textContainer}>
-        <Text style={styles.streakCount}>{currentStreak} Day Streak</Text>
+        <Text style={styles.streakCount}>{displayedStreak} Day Streak</Text>
         <Text style={styles.bestStreak}>Keep it going! Best: {bestStreak} days</Text>
       </View>
     </LinearGradient>

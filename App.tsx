@@ -19,6 +19,7 @@ import TodayScreen from './src/screens/TodayScreen';
 import StatsScreen from './src/screens/StatsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import AddHabitScreen from './src/screens/AddHabitScreen';
+import EditHabitScreen from './src/screens/EditHabitScreen';
 import HabitDetailScreen from './src/screens/HabitDetailScreen';
 import { colors, fontSize, fontFamily } from './src/theme';
 
@@ -27,6 +28,7 @@ SplashScreen.preventAutoHideAsync();
 export type RootStackParamList = {
   MainTabs: undefined;
   AddHabit: undefined;
+  EditHabit: { habitId: string };
   HabitDetail: { habitId: string };
 };
 
@@ -119,6 +121,11 @@ export default function App() {
           <Stack.Screen
             name="AddHabit"
             component={AddHabitScreen}
+            options={{ presentation: 'transparentModal', animation: 'none' }}
+          />
+          <Stack.Screen
+            name="EditHabit"
+            component={EditHabitScreen}
             options={{ presentation: 'transparentModal', animation: 'none' }}
           />
         </Stack.Navigator>

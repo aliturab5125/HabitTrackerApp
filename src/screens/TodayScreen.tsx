@@ -1,12 +1,11 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   StyleSheet,
   TouchableOpacity,
   Alert,
-  ListRenderItemInfo,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -19,7 +18,9 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
+  FadeInDown,
 } from 'react-native-reanimated';
+import ConfettiCannon from 'react-native-confetti-cannon';
 import { format } from 'date-fns';
 import { colors, spacing, fontSize, fontFamily, radii, letterSpacing } from '../theme';
 import { useHabitStore } from '../store/habitStore';
@@ -27,6 +28,7 @@ import { getTodayISO, getCurrentStreak, getBestStreak } from '../utils/dateUtils
 import { Habit } from '../types';
 import HabitRow from '../components/HabitRow';
 import StreakCard from '../components/StreakCard';
+import HabitActionSheet from '../components/HabitActionSheet';
 import { RootStackParamList } from '../../App';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -38,16 +40,51 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
+// ─── All-done toast ───────────────────────────────────────────────────────────
+
+function AllDoneToast({ visible }: { visible: boolean }) {
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (visible) {
+      opacity.value = withSequence(
+        withTiming(1, { duration: 300 }),
+        withTiming(1, { duration: 1900 }),
+        withTiming(0, { duration: 300 }),
+      );
+    }
+  }, [visible, opacity]);
+
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  if (!visible) return null;
+
+  return (
+    <Animated.View style={[styles.toast, style]} pointerEvents="none">
+      <Text style={styles.toastText}>All done today! 🎉</Text>
+    </Animated.View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
 export default function TodayScreen() {
   const navigation = useNavigation<NavProp>();
-  const { habits, toggleHabitCompletion, deleteHabit } = useHabitStore();
+  const { habits, toggleHabitCompletion, deleteHabit, isCompletedToday } = useHabitStore();
   const today = getTodayISO();
-  const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
   const dateLabel = format(new Date(), 'EEEE, MMMM d');
+  const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
+  const confettiRef = useRef<ConfettiCannon>(null);
+
+  // Action sheet state
+  const [actionSheetHabit, setActionSheetHabit] = useState<Habit | null>(null);
+
+  // Toast state
+  const [showToast, setShowToast] = useState(false);
 
   const completedToday = useMemo(
-    () => habits.filter((h) => h.completedDates.includes(today)).length,
-    [habits, today],
+    () => habits.filter((h) => isCompletedToday(h)).length,
+    [habits, isCompletedToday],
   );
 
   const maxStreak = useMemo(() => {
@@ -67,12 +104,31 @@ export default function TodayScreen() {
     [toggleHabitCompletion],
   );
 
+  // Check for 100% completion after every toggle
+  const prevCompletedRef = useRef(completedToday);
+  useEffect(() => {
+    if (
+      habits.length > 0 &&
+      completedToday === habits.length &&
+      prevCompletedRef.current < habits.length
+    ) {
+      confettiRef.current?.start();
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2500);
+    }
+    prevCompletedRef.current = completedToday;
+  }, [completedToday, habits.length]);
+
   const handlePressHabit = useCallback(
     (id: string) => {
       navigation.navigate('HabitDetail', { habitId: id });
     },
     [navigation],
   );
+
+  const handleLongPressHabit = useCallback((habit: Habit) => {
+    setActionSheetHabit(habit);
+  }, []);
 
   const handleSwipeDelete = useCallback(
     (habit: Habit) => {
@@ -98,9 +154,23 @@ export default function TodayScreen() {
     [deleteHabit],
   );
 
+  const handleActionSheetEdit = useCallback(
+    (habitId: string) => {
+      navigation.navigate('EditHabit', { habitId });
+    },
+    [navigation],
+  );
+
+  const handleActionSheetDelete = useCallback(
+    (habitId: string) => {
+      deleteHabit(habitId);
+    },
+    [deleteHabit],
+  );
+
   const fabScale = useSharedValue(1);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (habits.length === 0) {
       fabScale.value = withRepeat(
         withSequence(
@@ -132,73 +202,64 @@ export default function TodayScreen() {
     [handleSwipeDelete],
   );
 
-  const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<Habit>) => (
-      <Swipeable
-        ref={(ref) => {
-          if (ref) swipeableRefs.current.set(item.id, ref);
-          else swipeableRefs.current.delete(item.id);
-        }}
-        renderRightActions={() => renderRightActions(item)}
-        rightThreshold={40}
-        overshootRight={false}
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView
+        contentContainerStyle={habits.length === 0 ? styles.emptyList : styles.list}
+        showsVerticalScrollIndicator={false}
       >
-        <HabitRow
-          habit={item}
-          onToggle={handleToggle}
-          onPressHabit={handlePressHabit}
-        />
-      </Swipeable>
-    ),
-    [handleToggle, handlePressHabit, renderRightActions],
-  );
-
-  const keyExtractor = useCallback((item: Habit) => item.id, []);
-
-  const ListHeaderComponent = useMemo(
-    () => (
-      <>
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.greeting}>
-            {getGreeting()}, Ali 👋
-          </Text>
+          <Text style={styles.greeting}>{getGreeting()}, Ali 👋</Text>
           <Text style={styles.subtitle}>
             {dateLabel} · {completedToday} of {habits.length} done
           </Text>
         </View>
 
+        {/* Streak card */}
         {habits.length > 0 && (
           <StreakCard currentStreak={maxStreak} bestStreak={bestStreak} />
         )}
 
+        {/* Habits section */}
         {habits.length > 0 && (
           <Text style={styles.sectionLabel}>HABITS</Text>
         )}
-      </>
-    ),
-    [dateLabel, completedToday, habits.length, maxStreak, bestStreak],
-  );
 
-  const ListEmptyComponent = (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyEmoji}>🌱</Text>
-      <Text style={styles.emptyTitle}>No habits yet</Text>
-      <Text style={styles.emptySubtext}>Tap + to add your first habit</Text>
-    </View>
-  );
+        {habits.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyEmoji}>🌱</Text>
+            <Text style={styles.emptyTitle}>No habits yet</Text>
+            <Text style={styles.emptySubtext}>Tap + to add your first habit</Text>
+          </View>
+        ) : (
+          habits.map((item, index) => (
+            <Animated.View
+              key={item.id}
+              entering={FadeInDown.delay(index * 60).springify()}
+            >
+              <Swipeable
+                ref={(ref) => {
+                  if (ref) swipeableRefs.current.set(item.id, ref);
+                  else swipeableRefs.current.delete(item.id);
+                }}
+                renderRightActions={() => renderRightActions(item)}
+                rightThreshold={40}
+                overshootRight={false}
+              >
+                <HabitRow
+                  habit={item}
+                  onToggle={handleToggle}
+                  onPressHabit={handlePressHabit}
+                  onLongPressHabit={handleLongPressHabit}
+                />
+              </Swipeable>
+            </Animated.View>
+          ))
+        )}
+      </ScrollView>
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <FlatList
-        data={habits}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        ListHeaderComponent={ListHeaderComponent}
-        ListEmptyComponent={ListEmptyComponent}
-        contentContainerStyle={habits.length === 0 ? styles.emptyList : styles.list}
-        showsVerticalScrollIndicator={false}
-      />
-
+      {/* FAB */}
       <Animated.View style={[styles.fab, fabAnimatedStyle]}>
         <TouchableOpacity
           style={styles.fabInner}
@@ -208,6 +269,30 @@ export default function TodayScreen() {
           <Text style={styles.fabIcon}>+</Text>
         </TouchableOpacity>
       </Animated.View>
+
+      {/* Confetti */}
+      <ConfettiCannon
+        ref={confettiRef}
+        count={120}
+        origin={{ x: -10, y: 0 }}
+        autoStart={false}
+        fadeOut
+        fallSpeed={3000}
+        explosionSpeed={350}
+      />
+
+      {/* All-done toast */}
+      <AllDoneToast visible={showToast} />
+
+      {/* Long-press action sheet */}
+      {actionSheetHabit !== null && (
+        <HabitActionSheet
+          habit={actionSheetHabit}
+          onClose={() => setActionSheetHabit(null)}
+          onEdit={handleActionSheetEdit}
+          onDelete={handleActionSheetDelete}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -255,6 +340,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingTop: spacing.xl * 2,
     paddingBottom: spacing.xl,
   },
   emptyEmoji: {
@@ -309,5 +395,22 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     lineHeight: 32,
     marginTop: -1,
+  },
+  toast: {
+    position: 'absolute',
+    bottom: 100,
+    alignSelf: 'center',
+    backgroundColor: colors.modalSurface,
+    borderRadius: radii.pill,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.success + '44',
+  },
+  toastText: {
+    fontSize: fontSize.sm,
+    fontFamily: fontFamily.semiBold,
+    fontWeight: '600',
+    color: colors.textPrimary,
   },
 });

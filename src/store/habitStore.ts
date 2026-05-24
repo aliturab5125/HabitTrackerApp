@@ -5,6 +5,7 @@ import { Habit } from '../types';
 import {
   getCurrentStreak as computeStreak,
   getCompletionRate as computeCompletionRate,
+  getTodayISO,
 } from '../utils/dateUtils';
 
 interface HabitState {
@@ -17,10 +18,12 @@ interface HabitState {
 
   // Habit actions
   addHabit: (name: string, emoji: string, color: string) => void;
+  editHabit: (id: string, name: string, emoji: string, color: string) => void;
   deleteHabit: (id: string) => void;
   toggleHabitCompletion: (id: string, date: string) => void;
   getCompletionRate: (id: string, days: number) => number;
   getCurrentStreak: (id: string) => number;
+  isCompletedToday: (habit: Habit) => boolean;
   resetAll: () => void;
 
   // Preference setters
@@ -44,9 +47,23 @@ export const useHabitStore = create<HabitState>()(
           emoji,
           color,
           createdAt: new Date().toISOString(),
+          habitType: 'boolean',
+          targetCount: 1,
+          activeDays: [0, 1, 2, 3, 4, 5, 6],
+          reminderTimes: [],
           completedDates: [],
+          countLog: {},
+          notificationIds: [],
         };
         set((state) => ({ habits: [...state.habits, newHabit] }));
+      },
+
+      editHabit: (id, name, emoji, color) => {
+        set((state) => ({
+          habits: state.habits.map((h) =>
+            h.id === id ? { ...h, name, emoji, color } : h
+          ),
+        }));
       },
 
       deleteHabit: (id) => {
@@ -59,6 +76,13 @@ export const useHabitStore = create<HabitState>()(
         set((state) => ({
           habits: state.habits.map((h) => {
             if (h.id !== id) return h;
+            const habitType = h.habitType ?? 'boolean';
+            if (habitType === 'count') {
+              const current = h.countLog?.[date] ?? 0;
+              const target = h.targetCount ?? 1;
+              const next = current >= target ? 0 : current + 1;
+              return { ...h, countLog: { ...h.countLog, [date]: next } };
+            }
             const alreadyCompleted = h.completedDates.includes(date);
             return {
               ...h,
@@ -80,6 +104,15 @@ export const useHabitStore = create<HabitState>()(
         const habit = get().habits.find((h) => h.id === id);
         if (!habit) return 0;
         return computeStreak(habit.completedDates);
+      },
+
+      isCompletedToday: (habit) => {
+        const today = getTodayISO();
+        const habitType = habit.habitType ?? 'boolean';
+        if (habitType === 'count') {
+          return (habit.countLog?.[today] ?? 0) >= (habit.targetCount ?? 1);
+        }
+        return habit.completedDates.includes(today);
       },
 
       resetAll: () => {

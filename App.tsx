@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -56,11 +56,12 @@ function TabIcon({ emoji, focused }: TabIconProps) {
 }
 
 function MainTabs() {
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, { height: 60 + insets.bottom, paddingBottom: insets.bottom }],
         tabBarActiveTintColor: colors.tabBarActiveText,
         tabBarInactiveTintColor: colors.tabBarInactiveText,
         tabBarLabelStyle: styles.tabBarLabel,
@@ -142,11 +143,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tabBar: {
-    height: 60,
     backgroundColor: colors.tabBar,
     borderTopWidth: 1,
     borderTopColor: colors.tabBarBorder,
-    paddingBottom: 0,
   },
   tabBarItem: {
     paddingVertical: 4,

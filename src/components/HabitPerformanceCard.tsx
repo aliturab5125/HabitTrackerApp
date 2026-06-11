@@ -15,34 +15,26 @@ import {
   radii,
 } from '../theme';
 import {
-  getCurrentStreak,
-  getCompletionRate,
-  getHeatmapData,
-} from '../utils/dateUtils';
+  getHabitCurrentStreak,
+  getHabitCompletionRate,
+  getHabitTrendData,
+} from '../utils/habitUtils';
+import HabitTrendChart from './HabitTrendChart';
 
-const HEATMAP_WEEKS = 10;
-const CELL_SIZE = 10;
-const CELL_GAP = 2;
-const CELL_RADIUS = 2;
-const PROGRESS_BAR_HEIGHT = 4;
+const TREND_DAYS = 7;
+const CHART_HEIGHT = 48;
 
 interface Props {
   habit: Habit;
 }
 
 export default function HabitPerformanceCard({ habit }: Props) {
-  const streak = useMemo(
-    () => getCurrentStreak(habit.completedDates),
-    [habit.completedDates],
-  );
+  const streak = useMemo(() => getHabitCurrentStreak(habit), [habit]);
   const completionRate = useMemo(
-    () => getCompletionRate(habit.completedDates, 30),
-    [habit.completedDates],
+    () => getHabitCompletionRate(habit, 30),
+    [habit],
   );
-  const heatmap = useMemo(
-    () => getHeatmapData(habit.completedDates, HEATMAP_WEEKS),
-    [habit.completedDates],
-  );
+  const trendData = useMemo(() => getHabitTrendData(habit, TREND_DAYS), [habit]);
 
   const progress = useSharedValue(0);
 
@@ -71,27 +63,21 @@ export default function HabitPerformanceCard({ habit }: Props) {
         <Text style={styles.streak}>🔥 {streak}</Text>
       </View>
 
+      <View style={styles.rateRow}>
+        <Text style={styles.rateLabel}>30-day rate</Text>
+        <Text style={styles.rateValue}>{completionRate}%</Text>
+      </View>
+
       <View style={styles.progressTrack}>
         <Animated.View style={[styles.progressFill, progressFillStyle]} />
       </View>
 
-      <View style={styles.heatmap}>
-        {heatmap.map((week, wIdx) => (
-          <View key={`w-${wIdx}`} style={styles.heatmapColumn}>
-            {week.map((cell, dIdx) => (
-              <View
-                key={`c-${wIdx}-${dIdx}`}
-                style={[
-                  styles.cell,
-                  cell.completed
-                    ? { backgroundColor: colors.primary }
-                    : { backgroundColor: colors.heatmapEmpty },
-                ]}
-              />
-            ))}
-          </View>
-        ))}
-      </View>
+      <HabitTrendChart
+        data={trendData}
+        accentColor={habit.color}
+        barHeight={CHART_HEIGHT}
+        title="LAST 7 DAYS"
+      />
     </View>
   );
 }
@@ -134,28 +120,33 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     color: colors.textMuted,
   },
+  rateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  rateLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.regular,
+    color: colors.textMuted,
+  },
+  rateValue: {
+    fontSize: fontSize.xs,
+    fontFamily: fontFamily.semiBold,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
   progressTrack: {
-    height: PROGRESS_BAR_HEIGHT,
+    height: 4,
     backgroundColor: colors.statsProgressTrack,
-    borderRadius: PROGRESS_BAR_HEIGHT,
+    borderRadius: 4,
     overflow: 'hidden',
-    marginBottom: spacing.sm + 2,
+    marginBottom: spacing.sm,
   },
   progressFill: {
     height: '100%',
     backgroundColor: colors.primary,
-    borderRadius: PROGRESS_BAR_HEIGHT,
-  },
-  heatmap: {
-    flexDirection: 'row',
-    gap: CELL_GAP,
-  },
-  heatmapColumn: {
-    gap: CELL_GAP,
-  },
-  cell: {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    borderRadius: CELL_RADIUS,
+    borderRadius: 4,
   },
 });

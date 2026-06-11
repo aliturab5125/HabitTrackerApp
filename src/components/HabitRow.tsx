@@ -21,7 +21,8 @@ import Svg, { Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { Habit } from '../types';
 import { colors, spacing, fontSize, fontFamily, radii } from '../theme';
-import { getTodayISO, getCurrentStreak } from '../utils/dateUtils';
+import { getTodayISO } from '../utils/dateUtils';
+import { getHabitCurrentStreak } from '../utils/habitUtils';
 import { useHabitStore } from '../store/habitStore';
 
 // ─── Count Ring (SVG) ─────────────────────────────────────────────────────────
@@ -215,7 +216,7 @@ export default function HabitRow({
   const today = getTodayISO();
   const isCompletedTodayFn = useHabitStore((s) => s.isCompletedToday);
   const isCompleted = isCompletedTodayFn(habit);
-  const streak = getCurrentStreak(habit.completedDates, habit.activeDays);
+  const streak = getHabitCurrentStreak(habit);
   const hapticsEnabled = useHabitStore((s) => s.hapticsEnabled);
 
   const isCount = (habit.habitType ?? 'boolean') === 'count';

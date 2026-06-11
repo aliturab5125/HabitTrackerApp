@@ -24,6 +24,7 @@ import EditHabitScreen from './src/screens/EditHabitScreen';
 import HabitDetailScreen from './src/screens/HabitDetailScreen';
 import { colors, fontSize, fontFamily } from './src/theme';
 import { requestNotificationPermission } from './src/utils/notificationUtils';
+import { useHabitStore } from './src/store/habitStore';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -120,7 +121,11 @@ export default function App() {
   React.useEffect(() => {
     if (fontsLoaded) {
       SplashScreen.hideAsync();
-      requestNotificationPermission();
+      requestNotificationPermission().then((granted) => {
+        if (granted) {
+          useHabitStore.getState().syncGlobalReminder();
+        }
+      });
     }
   }, [fontsLoaded]);
 

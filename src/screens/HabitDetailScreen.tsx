@@ -7,13 +7,13 @@ import {
   TouchableOpacity,
   Alert,
   Pressable,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
-  FadeIn,
   useAnimatedReaction,
   useSharedValue,
   withTiming,
@@ -31,23 +31,19 @@ import {
 } from '../theme';
 import { useHabitStore } from '../store/habitStore';
 import {
-  getCurrentStreak,
-  getBestStreak,
-  getCalendarHeatmap,
-} from '../utils/dateUtils';
+  getHabitCurrentStreak,
+  getHabitBestStreak,
+  getHabitCompletionRate,
+  getHabitTrendData,
+  getHabitCompletionDates,
+} from '../utils/habitUtils';
+import HabitTrendChart from '../components/HabitTrendChart';
 import { RootStackParamList } from '../../App';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'HabitDetail'>;
 type Route = RouteProp<RootStackParamList, 'HabitDetail'>;
 
-const HEATMAP_WEEKS = 12;
-const CELL_SIZE = 12;
-const CELL_GAP = 3;
-const CELL_RADIUS = 3;
-const DAY_LABEL_WIDTH = 16;
-const LABEL_FONT_SIZE = 9;
-const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const GRID_WIDTH = HEATMAP_WEEKS * (CELL_SIZE + CELL_GAP) - CELL_GAP;
+const TREND_DAYS = 30;
 
 interface StatPillProps {
   value: string | number;
@@ -67,6 +63,7 @@ export default function HabitDetailScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { habitId } = route.params;
+  const { width } = useWindowDimensions();
 
   const habit = useHabitStore((s) => s.habits.find((h) => h.id === habitId));
   const deleteHabit = useHabitStore((s) => s.deleteHabit);
@@ -78,17 +75,22 @@ export default function HabitDetailScreen() {
   }, [habit, navigation]);
 
   const currentStreak = useMemo(
-    () => (habit ? getCurrentStreak(habit.completedDates) : 0),
+    () => (habit ? getHabitCurrentStreak(habit) : 0),
     [habit],
   );
 
   const bestStreak = useMemo(
-    () => (habit ? getBestStreak(habit.completedDates) : 0),
+    () => (habit ? getHabitBestStreak(habit) : 0),
     [habit],
   );
 
-  const heatmap = useMemo(
-    () => (habit ? getCalendarHeatmap(habit.completedDates, HEATMAP_WEEKS) : []),
+  const completionRate = useMemo(
+    () => (habit ? getHabitCompletionRate(habit, 30) : 0),
+    [habit],
+  );
+
+  const trendData = useMemo(
+    () => (habit ? getHabitTrendData(habit, TREND_DAYS) : []),
     [habit],
   );
 
@@ -135,7 +137,8 @@ export default function HabitDetailScreen() {
   if (!habit) return null;
 
   const startedLabel = format(parseISO(habit.createdAt), 'MMM d');
-  const totalDone = habit.completedDates.length;
+  const totalDone = getHabitCompletionDates(habit).length;
+  const chartWidth = width - spacing.md * 2;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -170,66 +173,20 @@ export default function HabitDetailScreen() {
         <View style={styles.pillsRow}>
           <StatPill value={bestStreak} label="Best Streak" />
           <StatPill value={totalDone} label="Total Done" />
+          <StatPill value={`${completionRate}%`} label="30-Day Rate" />
           <StatPill value={startedLabel} label="Started" />
         </View>
 
-        <Text style={styles.sectionLabel}>COMPLETION HISTORY</Text>
+        <Text style={styles.sectionLabel}>30-DAY TREND</Text>
 
-        <View style={styles.heatmapContainer}>
-          <View style={styles.monthLabelsRow}>
-            <View style={{ width: DAY_LABEL_WIDTH + CELL_GAP }} />
-            <View style={styles.monthLabelsTrack}>
-              {heatmap.map((week, w) => {
-                const month = format(parseISO(week[0].date), 'MMM');
-                const prevMonth =
-                  w > 0
-                    ? format(parseISO(heatmap[w - 1][0].date), 'MMM')
-                    : null;
-                const showLabel = w === 0 || month !== prevMonth;
-                if (!showLabel) return null;
-                return (
-                  <Text
-                    key={`m-${w}`}
-                    style={[
-                      styles.monthLabel,
-                      { left: w * (CELL_SIZE + CELL_GAP) },
-                    ]}
-                  >
-                    {month}
-                  </Text>
-                );
-              })}
-            </View>
-          </View>
-
-          <View style={styles.heatmapBody}>
-            <View style={styles.dayLabelsCol}>
-              {DAY_LABELS.map((label, i) => (
-                <View key={`d-${i}`} style={styles.dayLabelCell}>
-                  <Text style={styles.dayLabel}>{label}</Text>
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.weeksRow}>
-              {heatmap.map((week, w) => (
-                <View key={`w-${w}`} style={styles.weekCol}>
-                  {week.map((cell, d) => (
-                    <Animated.View
-                      key={`c-${w}-${d}`}
-                      entering={FadeIn.delay((w * 7 + d) * 8).duration(200)}
-                      style={[
-                        styles.cell,
-                        cell.completed
-                          ? { backgroundColor: colors.primary }
-                          : { backgroundColor: colors.heatmapEmpty },
-                      ]}
-                    />
-                  ))}
-                </View>
-              ))}
-            </View>
-          </View>
+        <View style={styles.chartContainer}>
+          <HabitTrendChart
+            data={trendData}
+            chartWidth={chartWidth}
+            accentColor={habit.color}
+            barHeight={72}
+            showLegend
+          />
         </View>
 
         <Pressable
@@ -305,6 +262,7 @@ const styles = StyleSheet.create({
   },
   pillsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
     gap: spacing.sm,
     marginTop: spacing.md,
@@ -318,6 +276,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: 14,
     alignItems: 'center',
+    minWidth: 72,
   },
   pillValue: {
     fontSize: fontSize.sm,
@@ -342,54 +301,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     marginBottom: spacing.sm,
   },
-  heatmapContainer: {
-    alignSelf: 'center',
+  chartContainer: {
     paddingHorizontal: spacing.md,
-  },
-  monthLabelsRow: {
-    flexDirection: 'row',
-    marginBottom: 4,
-  },
-  monthLabelsTrack: {
-    width: GRID_WIDTH,
-    height: LABEL_FONT_SIZE + 4,
-    position: 'relative',
-  },
-  monthLabel: {
-    position: 'absolute',
-    top: 0,
-    fontSize: LABEL_FONT_SIZE,
-    fontFamily: fontFamily.regular,
-    color: colors.textLabel,
-  },
-  heatmapBody: {
-    flexDirection: 'row',
-  },
-  dayLabelsCol: {
-    width: DAY_LABEL_WIDTH,
-    marginRight: CELL_GAP,
-    gap: CELL_GAP,
-  },
-  dayLabelCell: {
-    height: CELL_SIZE,
-    justifyContent: 'center',
-  },
-  dayLabel: {
-    fontSize: LABEL_FONT_SIZE,
-    fontFamily: fontFamily.regular,
-    color: colors.textLabel,
-  },
-  weeksRow: {
-    flexDirection: 'row',
-    gap: CELL_GAP,
-  },
-  weekCol: {
-    gap: CELL_GAP,
-  },
-  cell: {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    borderRadius: CELL_RADIUS,
   },
   deleteButton: {
     alignSelf: 'center',

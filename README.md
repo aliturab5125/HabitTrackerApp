@@ -2,38 +2,30 @@
 > A beautiful habit tracking app built with React Native & Expo
 
 ## Features
-- Daily habit check-ins with streak tracking
-- Animated circular checkboxes with haptic feedback
-- 12-week completion heatmap per habit
-- Stats dashboard with bar chart and arc progress ring
-- Swipe to delete, bottom sheet add flow
-- Persistent storage with MMKV — works fully offline
+- Daily habit check-ins with streak tracking (boolean + count targets)
+- Animated checkboxes with haptic feedback and confetti celebrations
+- Per-habit 7-day and 30-day bar trend charts
+- Stats dashboard with arc progress ring and 14-day overview chart
+- Per-habit reminders and optional global daily reminder
+- Swipe to delete, bottom sheet add/edit flow
+- Persistent storage with AsyncStorage — works fully offline
 
 ## Tech Stack
 | Library | Purpose |
 |---|---|
-| Expo SDK 51 | App framework |
-| React Native Reanimated 3 | All animations |
-| Zustand + MMKV | State + offline persistence |
+| Expo SDK 54 | App framework |
+| React Native Reanimated | Animations |
+| Zustand + AsyncStorage | State + offline persistence |
 | React Navigation | Stack + bottom tabs |
-| Victory Native | Bar chart |
-| react-native-svg | Arc progress ring |
-| date-fns | Streak + heatmap logic |
+| react-native-svg | Charts and progress rings |
+| date-fns | Streak + trend logic |
 | expo-haptics | Tactile feedback |
-
-## What This Demonstrates
-- Custom Reanimated 3 animations (spring, sequence, stagger)
-- Zustand store with MMKV for zero-latency persistence
-- Streak algorithm and heatmap data generation from raw dates
-- Gesture-based interactions (swipe to delete)
-- Bottom sheet modal with spring physics
-- Component-level state machines (checkbox 3 states)
-- Clean folder structure scalable to production
+| expo-notifications | Habit and daily reminders |
 
 ## Getting Started
 ```bash
 git clone <repo-url>
-cd habit-tracker
+cd HabitTrackerApp
 npm install
 npx expo start
 ```
@@ -43,14 +35,16 @@ npx expo start
 src/
 ├── components/
 │   ├── HabitRow.tsx              # Animated habit row with swipe support
-│   ├── HabitPerformanceCard.tsx  # Per-habit stats card on Stats screen
-│   ├── LastFourteenDaysChart.tsx # 14-day bar chart component
+│   ├── HabitPerformanceCard.tsx  # Per-habit stats with 7-day trend chart
+│   ├── HabitTrendChart.tsx       # Reusable bar chart for habit trends
+│   ├── LastFourteenDaysChart.tsx # 14-day aggregate bar chart
 │   ├── MiniStatCard.tsx          # Small stat pill for Stats screen
 │   ├── StatsHeroCard.tsx         # Arc progress ring hero card
 │   └── StreakCard.tsx            # Streak summary card on Today screen
 ├── screens/
 │   ├── AddHabitScreen.tsx        # Bottom sheet modal for adding habits
-│   ├── HabitDetailScreen.tsx     # Detail view with heatmap + stats
+│   ├── EditHabitScreen.tsx       # Bottom sheet modal for editing habits
+│   ├── HabitDetailScreen.tsx     # Detail view with 30-day trend chart
 │   ├── SettingsScreen.tsx        # Preferences, habit management, danger zone
 │   ├── StatsScreen.tsx           # Aggregated stats dashboard
 │   └── TodayScreen.tsx           # Main daily check-in screen
@@ -61,5 +55,7 @@ src/
 ├── types/
 │   └── index.ts                  # Shared TypeScript types
 └── utils/
-    └── dateUtils.ts              # Streak + heatmap + completion logic
+    ├── dateUtils.ts              # Date formatting + streak algorithms
+    ├── habitUtils.ts             # Unified completion/stats helpers
+    └── notificationUtils.ts      # Reminder scheduling
 ```

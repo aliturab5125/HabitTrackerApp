@@ -2,14 +2,16 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Habit, HabitType } from '../types';
+import { getTodayISO } from '../utils/dateUtils';
 import {
-  getCurrentStreak as computeStreak,
-  getCompletionRate as computeCompletionRate,
-  getTodayISO,
-} from '../utils/dateUtils';
+  getHabitCurrentStreak,
+  getHabitCompletionRate,
+  isHabitCompletedOnDate,
+} from '../utils/habitUtils';
 import {
   scheduleHabitReminders,
   cancelHabitReminders,
+  scheduleGlobalReminder,
 } from '../utils/notificationUtils';
 
 export interface NewHabitParams {
@@ -28,6 +30,7 @@ interface HabitState {
   // Preferences
   reminderEnabled: boolean;
   reminderTime: string;
+  globalNotificationId: string | null;
   hapticsEnabled: boolean;
 
   // Habit actions
@@ -46,6 +49,19 @@ interface HabitState {
   setReminderEnabled: (val: boolean) => void;
   setReminderTime: (val: string) => void;
   setHapticsEnabled: (val: boolean) => void;
+  syncGlobalReminder: () => void;
+}
+
+async function applyGlobalReminder(
+  enabled: boolean,
+  time: string,
+  existingId: string | null,
+): Promise<string | null> {
+  if (existingId) {
+    await cancelHabitReminders([existingId]);
+  }
+  if (!enabled) return null;
+  return scheduleGlobalReminder(time);
 }
 
 export const useHabitStore = create<HabitState>()(
@@ -53,7 +69,8 @@ export const useHabitStore = create<HabitState>()(
     (set, get) => ({
       habits: [],
       reminderEnabled: false,
-      reminderTime: '8:00 AM',
+      reminderTime: '08:00',
+      globalNotificationId: null,
       hapticsEnabled: true,
 
       addHabit: (params) => {
@@ -72,7 +89,6 @@ export const useHabitStore = create<HabitState>()(
           notificationIds: [],
         };
 
-        // Schedule notifications (fire-and-forget)
         scheduleHabitReminders(newHabit).then((ids) => {
           set((state) => ({
             habits: state.habits.map((h) =>
@@ -87,7 +103,6 @@ export const useHabitStore = create<HabitState>()(
       editHabit: (id, params) => {
         const existing = get().habits.find((h) => h.id === id);
 
-        // Cancel old notifications then reschedule
         if (existing) {
           cancelHabitReminders(existing.notificationIds ?? []).then(() => {
             const updated: Habit = {
@@ -186,33 +201,51 @@ export const useHabitStore = create<HabitState>()(
       getCompletionRate: (id, days) => {
         const habit = get().habits.find((h) => h.id === id);
         if (!habit) return 0;
-        return computeCompletionRate(habit.completedDates, days);
+        return getHabitCompletionRate(habit, days);
       },
 
       getCurrentStreak: (id) => {
         const habit = get().habits.find((h) => h.id === id);
         if (!habit) return 0;
-        return computeStreak(habit.completedDates, habit.activeDays);
+        return getHabitCurrentStreak(habit);
       },
 
       isCompletedToday: (habit) => {
-        const today = getTodayISO();
-        const habitType = habit.habitType ?? 'boolean';
-        if (habitType === 'count') {
-          return (habit.countLog?.[today] ?? 0) >= (habit.targetCount ?? 1);
-        }
-        return habit.completedDates.includes(today);
+        return isHabitCompletedOnDate(habit, getTodayISO());
       },
 
       resetAll: () => {
-        const habits = get().habits;
+        const { habits, globalNotificationId } = get();
         habits.forEach((h) => cancelHabitReminders(h.notificationIds ?? []));
-        set({ habits: [] });
+        if (globalNotificationId) {
+          cancelHabitReminders([globalNotificationId]);
+        }
+        set({ habits: [], globalNotificationId: null });
       },
 
-      setReminderEnabled: (val) => set({ reminderEnabled: val }),
-      setReminderTime: (val) => set({ reminderTime: val }),
+      setReminderEnabled: (val) => {
+        const { reminderTime, globalNotificationId } = get();
+        applyGlobalReminder(val, reminderTime, globalNotificationId).then((id) => {
+          set({ reminderEnabled: val, globalNotificationId: id });
+        });
+      },
+
+      setReminderTime: (val) => {
+        const { reminderEnabled, globalNotificationId } = get();
+        applyGlobalReminder(reminderEnabled, val, globalNotificationId).then((id) => {
+          set({ reminderTime: val, globalNotificationId: id });
+        });
+      },
+
       setHapticsEnabled: (val) => set({ hapticsEnabled: val }),
+
+      syncGlobalReminder: () => {
+        const { reminderEnabled, reminderTime, globalNotificationId } = get();
+        if (!reminderEnabled) return;
+        applyGlobalReminder(true, reminderTime, globalNotificationId).then((id) => {
+          set({ globalNotificationId: id });
+        });
+      },
     }),
     {
       name: 'habit-store',

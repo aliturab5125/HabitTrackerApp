@@ -10,8 +10,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   format,
   subDays,
-  parseISO,
-  startOfMonth,
   getDaysInMonth,
 } from 'date-fns';
 import {
@@ -22,7 +20,12 @@ import {
   letterSpacing,
 } from '../theme';
 import { useHabitStore } from '../store/habitStore';
-import { getCurrentStreak, getCompletionRate, getTodayISO } from '../utils/dateUtils';
+import {
+  getHabitCurrentStreak,
+  getHabitCompletionRate,
+  isHabitCompletedOnDate,
+  isHabitActiveOnDate,
+} from '../utils/habitUtils';
 import StatsHeroCard from '../components/StatsHeroCard';
 import MiniStatCard from '../components/MiniStatCard';
 import HabitPerformanceCard from '../components/HabitPerformanceCard';
@@ -37,56 +40,54 @@ export default function StatsScreen() {
   const { width } = useWindowDimensions();
   const chartWidth = width - spacing.md * 2;
 
-  const today = getTodayISO();
-
   const monthStats = useMemo(() => {
     const now = new Date();
-    const monthStart = startOfMonth(now);
     const daysInMonth = getDaysInMonth(now);
     const completedDaysSet = new Set<string>();
 
-    for (const habit of habits) {
-      for (const date of habit.completedDates) {
-        const parsed = parseISO(date);
-        if (parsed >= monthStart && parsed <= now) {
-          completedDaysSet.add(date);
-        }
-      }
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(now.getFullYear(), now.getMonth(), day);
+      if (date > now) break;
+
+      const dateISO = format(date, 'yyyy-MM-dd');
+      const anyCompleted = habits.some(
+        (h) => isHabitActiveOnDate(h, date) && isHabitCompletedOnDate(h, dateISO),
+      );
+      if (anyCompleted) completedDaysSet.add(dateISO);
     }
 
     return { completedDays: completedDaysSet.size, daysInMonth };
   }, [habits]);
 
-  const doneToday = useMemo(
-    () => habits.filter((h) => h.completedDates.includes(today)).length,
-    [habits, today],
-  );
+  const doneToday = useMemo(() => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    return habits.filter((h) => isHabitCompletedOnDate(h, today)).length;
+  }, [habits]);
 
   const bestStreak = useMemo(() => {
     if (habits.length === 0) return 0;
-    return Math.max(...habits.map((h) => getCurrentStreak(h.completedDates)));
+    return Math.max(...habits.map((h) => getHabitCurrentStreak(h)));
   }, [habits]);
 
   const avgRate = useMemo(() => {
     if (habits.length === 0) return 0;
     const total = habits.reduce(
-      (sum, h) => sum + getCompletionRate(h.completedDates, 30),
+      (sum, h) => sum + getHabitCompletionRate(h, 30),
       0,
     );
     return Math.round(total / habits.length);
   }, [habits]);
 
   const last14: DailyDatum[] = useMemo(() => {
-    const habitSets = habits.map((h) => new Set(h.completedDates));
     const result: DailyDatum[] = [];
     for (let i = LAST_N_DAYS - 1; i >= 0; i--) {
       const date = subDays(new Date(), i);
       const dateStr = format(date, 'yyyy-MM-dd');
       const label = format(date, 'EEE');
-      const count = habitSets.reduce(
-        (sum, set) => sum + (set.has(dateStr) ? 1 : 0),
-        0,
-      );
+      const count = habits.reduce((sum, h) => {
+        if (!isHabitActiveOnDate(h, date)) return sum;
+        return sum + (isHabitCompletedOnDate(h, dateStr) ? 1 : 0);
+      }, 0);
       result.push({ label, value: count });
     }
     return result;

@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -42,15 +43,21 @@ export type RootTabParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
+type TabIconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+
 interface TabIconProps {
-  emoji: string;
+  name: TabIconName;
   focused: boolean;
 }
 
-function TabIcon({ emoji, focused }: TabIconProps) {
+function TabIcon({ name, focused }: TabIconProps) {
   return (
     <View style={[styles.tabIconWrapper, focused && styles.tabIconWrapperActive]}>
-      <Text style={[styles.tabEmoji, { opacity: focused ? 1 : 0.5 }]}>{emoji}</Text>
+      <MaterialCommunityIcons
+        name={name}
+        size={22}
+        color={focused ? colors.tabBarActiveText : colors.tabBarInactiveText}
+      />
     </View>
   );
 }
@@ -73,7 +80,9 @@ function MainTabs() {
         component={TodayScreen}
         options={{
           tabBarLabel: 'Today',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="☀️" focused={focused} />,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name={focused ? 'calendar-check' : 'calendar-check-outline'} focused={focused} />
+          ),
         }}
       />
       <Tab.Screen
@@ -81,7 +90,9 @@ function MainTabs() {
         component={StatsScreen}
         options={{
           tabBarLabel: 'Stats',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="📊" focused={focused} />,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name={focused ? 'chart-line' : 'chart-line-variant'} focused={focused} />
+          ),
         }}
       />
       <Tab.Screen
@@ -89,7 +100,9 @@ function MainTabs() {
         component={SettingsScreen}
         options={{
           tabBarLabel: 'Settings',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="⚙️" focused={focused} />,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name={focused ? 'cog' : 'cog-outline'} focused={focused} />
+          ),
         }}
       />
     </Tab.Navigator>
@@ -156,14 +169,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabIconWrapper: {
-    paddingHorizontal: 14,
     paddingVertical: 4,
     borderRadius: 20,
   },
   tabIconWrapperActive: {
     backgroundColor: colors.tabBarActiveBg,
-  },
-  tabEmoji: {
-    fontSize: 20,
   },
 });

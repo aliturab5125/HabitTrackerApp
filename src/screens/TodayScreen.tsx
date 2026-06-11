@@ -24,7 +24,13 @@ import ConfettiCannon from 'react-native-confetti-cannon';
 import { format } from 'date-fns';
 import { colors, spacing, fontSize, fontFamily, radii, letterSpacing } from '../theme';
 import { useHabitStore } from '../store/habitStore';
-import { getTodayISO, getCurrentStreak, getBestStreak } from '../utils/dateUtils';
+import { getTodayISO } from '../utils/dateUtils';
+import {
+  getHabitCurrentStreak,
+  getHabitBestStreak,
+  getHabitsDueToday,
+  isHabitCompletedOnDate,
+} from '../utils/habitUtils';
 import { Habit } from '../types';
 import HabitRow from '../components/HabitRow';
 import StreakCard from '../components/StreakCard';
@@ -70,7 +76,7 @@ function AllDoneToast({ visible }: { visible: boolean }) {
 
 export default function TodayScreen() {
   const navigation = useNavigation<NavProp>();
-  const { habits, toggleHabitCompletion, incrementCount, decrementCount, deleteHabit, isCompletedToday } = useHabitStore();
+  const { habits, toggleHabitCompletion, incrementCount, decrementCount, deleteHabit } = useHabitStore();
   const today = getTodayISO();
   const dateLabel = format(new Date(), 'EEEE, MMMM d');
   const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
@@ -82,19 +88,21 @@ export default function TodayScreen() {
   // Toast state
   const [showToast, setShowToast] = useState(false);
 
+  const dueToday = useMemo(() => getHabitsDueToday(habits), [habits]);
+
   const completedToday = useMemo(
-    () => habits.filter((h) => isCompletedToday(h)).length,
-    [habits, isCompletedToday],
+    () => dueToday.filter((h) => isHabitCompletedOnDate(h, today)).length,
+    [dueToday, today],
   );
 
   const maxStreak = useMemo(() => {
     if (habits.length === 0) return 0;
-    return Math.max(...habits.map((h) => getCurrentStreak(h.completedDates)));
+    return Math.max(...habits.map((h) => getHabitCurrentStreak(h)));
   }, [habits]);
 
   const bestStreak = useMemo(() => {
     if (habits.length === 0) return 0;
-    return Math.max(...habits.map((h) => getBestStreak(h.completedDates)));
+    return Math.max(...habits.map((h) => getHabitBestStreak(h)));
   }, [habits]);
 
   const handleToggle = useCallback(
@@ -122,16 +130,16 @@ export default function TodayScreen() {
   const prevCompletedRef = useRef(completedToday);
   useEffect(() => {
     if (
-      habits.length > 0 &&
-      completedToday === habits.length &&
-      prevCompletedRef.current < habits.length
+      dueToday.length > 0 &&
+      completedToday === dueToday.length &&
+      prevCompletedRef.current < dueToday.length
     ) {
       confettiRef.current?.start();
       setShowToast(true);
       setTimeout(() => setShowToast(false), 2500);
     }
     prevCompletedRef.current = completedToday;
-  }, [completedToday, habits.length]);
+  }, [completedToday, dueToday.length]);
 
   const handlePressHabit = useCallback(
     (id: string) => {
@@ -224,9 +232,9 @@ export default function TodayScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.greeting}>{getGreeting()}, Ali 👋</Text>
+          <Text style={styles.greeting}>{getGreeting()} 👋</Text>
           <Text style={styles.subtitle}>
-            {dateLabel} · {completedToday} of {habits.length} done
+            {dateLabel} · {completedToday} of {dueToday.length} done
           </Text>
         </View>
 
@@ -236,7 +244,7 @@ export default function TodayScreen() {
         )}
 
         {/* Habits section */}
-        {habits.length > 0 && (
+        {dueToday.length > 0 && (
           <Text style={styles.sectionLabel}>HABITS</Text>
         )}
 
@@ -246,8 +254,14 @@ export default function TodayScreen() {
             <Text style={styles.emptyTitle}>No habits yet</Text>
             <Text style={styles.emptySubtext}>Tap + to add your first habit</Text>
           </View>
+        ) : dueToday.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyEmoji}>😌</Text>
+            <Text style={styles.emptyTitle}>Rest day</Text>
+            <Text style={styles.emptySubtext}>No habits scheduled for today</Text>
+          </View>
         ) : (
-          habits.map((item, index) => (
+          dueToday.map((item, index) => (
             <Animated.View
               key={item.id}
               entering={FadeInDown.delay(index * 60).springify()}

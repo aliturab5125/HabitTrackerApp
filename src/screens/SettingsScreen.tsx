@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,16 @@ import {
   Alert,
   Switch,
   ListRenderItemInfo,
+  Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { colors, spacing, fontSize, fontFamily, radii, letterSpacing } from '../theme';
 import { useHabitStore } from '../store/habitStore';
+import { formatReminderTime } from '../utils/dateUtils';
+import { parseReminderTime } from '../utils/notificationUtils';
 import { Habit } from '../types';
 
 // ─── Inline Toggle ────────────────────────────────────────────────────────────
@@ -65,10 +70,11 @@ interface PrefRowProps {
   label: React.ReactNode;
   right: React.ReactNode;
   indented?: boolean;
+  onPress?: () => void;
 }
 
-function PrefRow({ iconName, iconColor, label, right, indented = false }: PrefRowProps) {
-  return (
+function PrefRow({ iconName, iconColor, label, right, indented = false, onPress }: PrefRowProps) {
+  const content = (
     <View style={[styles.prefRow, indented && styles.prefRowIndented]}>
       {!indented ? (
         <MaterialCommunityIcons name={iconName} size={18} color={iconColor} style={styles.prefIcon} />
@@ -85,6 +91,31 @@ function PrefRow({ iconName, iconColor, label, right, indented = false }: PrefRo
       <View style={styles.prefRight}>{right}</View>
     </View>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  return content;
+}
+
+function reminderTimeToDate(timeStr: string): Date {
+  const parsed = parseReminderTime(timeStr);
+  const date = new Date();
+  if (parsed) {
+    date.setHours(parsed.hour, parsed.minute, 0, 0);
+  }
+  return date;
+}
+
+function dateToReminderTime(date: Date): string {
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -97,7 +128,11 @@ export default function SettingsScreen() {
   const reminderTime = useHabitStore((s) => s.reminderTime);
   const hapticsEnabled = useHabitStore((s) => s.hapticsEnabled);
   const setReminderEnabled = useHabitStore((s) => s.setReminderEnabled);
+  const setReminderTime = useHabitStore((s) => s.setReminderTime);
   const setHapticsEnabled = useHabitStore((s) => s.setHapticsEnabled);
+
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [pickerDate, setPickerDate] = useState(() => reminderTimeToDate(reminderTime));
 
   const handleDeleteHabit = useCallback(
     (habit: Habit) => {
@@ -133,6 +168,24 @@ export default function SettingsScreen() {
       { cancelable: true },
     );
   }, [resetAll]);
+
+  const handleTimePickerChange = useCallback(
+    (_event: DateTimePickerEvent, date?: Date) => {
+      if (Platform.OS === 'android') setShowTimePicker(false);
+      if (date) {
+        setPickerDate(date);
+        if (Platform.OS === 'android') {
+          setReminderTime(dateToReminderTime(date));
+        }
+      }
+    },
+    [setReminderTime],
+  );
+
+  const confirmIOSTimePicker = useCallback(() => {
+    setShowTimePicker(false);
+    setReminderTime(dateToReminderTime(pickerDate));
+  }, [pickerDate, setReminderTime]);
 
   const renderHabitRow = useCallback(
     ({ item }: ListRenderItemInfo<Habit>) => (
@@ -180,7 +233,6 @@ export default function SettingsScreen() {
           <>
             <SectionLabel title="PREFERENCES" />
 
-            {/* Daily reminder */}
             <PrefRow
               iconName="bell-outline"
               iconColor={colors.primary}
@@ -190,23 +242,27 @@ export default function SettingsScreen() {
               }
             />
 
-            {/* Reminder time — visible only when reminder is ON */}
             {reminderEnabled && (
               <PrefRow
-                iconName="bell-outline"
+                iconName="clock-outline"
                 iconColor={colors.primary}
                 label={<Text style={styles.prefLabelMuted}>Reminder time</Text>}
                 right={
                   <View style={styles.reminderTimeRight}>
-                    <Text style={styles.reminderTimeText}>{reminderTime}</Text>
+                    <Text style={styles.reminderTimeText}>
+                      {formatReminderTime(reminderTime)}
+                    </Text>
                     <MaterialCommunityIcons name="chevron-down" size={16} color={colors.primary} />
                   </View>
                 }
                 indented
+                onPress={() => {
+                  setPickerDate(reminderTimeToDate(reminderTime));
+                  setShowTimePicker(true);
+                }}
               />
             )}
 
-            {/* Haptic feedback */}
             <PrefRow
               iconName="vibrate"
               iconColor={colors.primary}
@@ -226,6 +282,40 @@ export default function SettingsScreen() {
           </>
         }
       />
+
+      {Platform.OS === 'android' && showTimePicker && (
+        <DateTimePicker
+          value={pickerDate}
+          mode="time"
+          display="spinner"
+          onChange={handleTimePickerChange}
+        />
+      )}
+
+      {Platform.OS === 'ios' && (
+        <Modal visible={showTimePicker} transparent animationType="slide">
+          <View style={styles.iosPickerOverlay}>
+            <View style={styles.iosPickerSheet}>
+              <View style={styles.iosPickerHeader}>
+                <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                  <Text style={styles.iosPickerCancel}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={confirmIOSTimePicker}>
+                  <Text style={styles.iosPickerDone}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={pickerDate}
+                mode="time"
+                display="spinner"
+                onChange={handleTimePickerChange}
+                textColor={colors.textPrimary}
+                style={styles.iosPicker}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -262,7 +352,6 @@ const styles = StyleSheet.create({
     color: colors.settingsDangerLabel,
   },
 
-  // Habit rows
   habitRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -294,7 +383,6 @@ const styles = StyleSheet.create({
     padding: 4,
   },
 
-  // Empty habits
   emptyHabitsRow: {
     marginBottom: spacing.sm,
   },
@@ -305,7 +393,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
 
-  // Preference rows
   prefRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -345,7 +432,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Reminder time right section
   reminderTimeRight: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -358,7 +444,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
 
-  // Danger zone
   clearAllRow: {
     backgroundColor: colors.settingsHabitRowBg,
     borderRadius: 10,
@@ -374,12 +459,45 @@ const styles = StyleSheet.create({
     color: colors.deleteText,
   },
 
-  // Version
   versionText: {
     fontSize: fontSize.xs,
     fontFamily: fontFamily.regular,
     color: colors.settingsVersionText,
     textAlign: 'center',
     marginTop: spacing.xl,
+  },
+
+  iosPickerOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: colors.backdrop,
+  },
+  iosPickerSheet: {
+    backgroundColor: colors.modalSurface,
+    borderTopLeftRadius: radii.sheet,
+    borderTopRightRadius: radii.sheet,
+    paddingBottom: spacing.xl,
+  },
+  iosPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.inputBorder,
+  },
+  iosPickerCancel: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.medium,
+    color: colors.textMuted,
+  },
+  iosPickerDone: {
+    fontSize: fontSize.md,
+    fontFamily: fontFamily.bold,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  iosPicker: {
+    backgroundColor: colors.modalSurface,
   },
 });
